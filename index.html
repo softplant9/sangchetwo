@@ -172,6 +172,14 @@
     margin-right: 6px;
   }
   .card.revealed .answer-inner { display: block; }
+  /* 답변 핵심 키워드 형광펜 강조 */
+  .answer-inner .kw {
+    background: linear-gradient(transparent 58%, rgba(255,221,87,0.42) 58%);
+    color: #f3f6fa;
+    font-weight: 600;
+    padding: 0 1px;
+    border-radius: 2px;
+  }
 
   .mark-bar {
     display: none;
@@ -1144,6 +1152,48 @@ function highlight(text) {
   return out;
 }
 
+// ── 답변 핵심 키워드 자동 강조(형광펜) ─────────────────────────
+// 선별된 도메인 전문용어(흔한 일반어는 제외해 강조가 산만해지지 않게 함)
+const KW_TERMS = [
+  '보디빌딩','유진 샌도우','데피니션','벌크업','컷','컨디셔닝','쿼터턴','규정포즈','아이워킹',
+  '컬러링','브론저','역삼각형','광배근','X쉐입','T쉐입','S라인','T라인','S커브',
+  '경기인','선수관리담당자','제명','자격정지',
+  '응급처치','심폐소생술','가슴압박','인공호흡','자동제세동기','하임리히법','기도폐쇄','기도 폐쇄',
+  '드레싱','지혈','냉찜질','거상','저혈당','쇼크','저체온증','골절','개방성','폐쇄성','염좌','화상','3C',
+  '도핑','금지약물','금지방법','도핑검사','시료','건조혈반','소재지정보','치료목적사용면책','금지목록',
+  '골격근','심장근','내장근','수의근','불수의근','가로무늬근','민무늬근',
+  '등척성','등장성','등속성','단축성','신장성','횡격막','외늑간근','내늑간근','흉쇄유돌근','사각근',
+  '시상면','관상면','수평면','굴곡','신전','외전','내전',
+  '저작작용','아밀레이스','연동운동','위산','위액',
+  '자이언트 세트','슈퍼세트','플러싱','펌핑','흡기','호기','유산소','무산소'
+];
+function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+const KW_RE = (function () {
+  const terms = KW_TERMS.slice().sort((a, b) => b.length - a.length).map(escapeRegExp).join('|');
+  const parts = [
+    '[가-힣]+\\s?\\([A-Za-z][^)]*\\)',  // 한글(영문) 용어쌍: 보호(Protection)
+    '\\([A-Za-z][^)]*\\)',              // (영문) 단독
+    terms,                              // 선별 전문용어
+    '[A-Za-z]{2,}[A-Za-z0-9]*',         // 영문/약어: CPR, AED, IFBB
+    '\\d+(?:[.,]\\d+)?(?:\\s?(?:회|도|년|세|분|초|개월|가지|단계|차|위|명|일|주|시간|개|%|kg|cm|kcal|°C))?', // 숫자+단위
+    '첫째|둘째|셋째|넷째|다섯째|여섯째|일곱째'
+  ];
+  return new RegExp('(' + parts.join('|') + ')', 'g');
+})();
+// 답변 텍스트를 HTML 이스케이프 후 키워드만 <span class="kw">로 감쌈
+function keyize(text) {
+  KW_RE.lastIndex = 0;
+  let out = '', last = 0, m;
+  while ((m = KW_RE.exec(text)) !== null) {
+    out += escapeHtml(text.slice(last, m.index));
+    out += '<span class="kw">' + escapeHtml(m[0]) + '</span>';
+    last = m.index + m[0].length;
+    if (m.index === KW_RE.lastIndex) KW_RE.lastIndex++;
+  }
+  out += escapeHtml(text.slice(last));
+  return out;
+}
+
 // 채점 결과 저장/복원 — 문항 "내용" 기준 키로 저장하여
 // 문제 섞기·문항 추가/수정·브라우저 재접속에도 채점 상태가 유지됨
 const STORE_KEY = 'bb_quiz_marks_v2';
@@ -1213,7 +1263,7 @@ function render() {
 
     const inner = document.createElement('div');
     inner.className = 'answer-inner';
-    inner.textContent = a;
+    inner.innerHTML = keyize(a);
     answer.appendChild(inner);
 
     const markBar = document.createElement('div');
