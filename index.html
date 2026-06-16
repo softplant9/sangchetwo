@@ -129,13 +129,37 @@
     margin-top: 2px;
   }
   .card.open .chevron { transform: rotate(180deg); color: var(--accent); }
+  /* 문항 클릭 시 문제 하이라이트 */
+  .card.open .question { background: var(--accent-soft); }
+  .card.open .q-text { color: var(--accent); }
 
   .answer {
     max-height: 0;
     overflow: hidden;
     transition: max-height .3s ease;
   }
+
+  /* 정답 확인 버튼 영역 (정답은 클릭 전까지 숨김) */
+  .answer-actions {
+    padding: 8px 20px 18px 62px;
+  }
+  .reveal-btn {
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 9px 22px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .12s;
+  }
+  .reveal-btn:hover { background: var(--accent); color: #06121f; }
+  .card.revealed .answer-actions { display: none; }
+
   .answer-inner {
+    display: none;
     padding: 4px 20px 20px 62px;
     color: var(--a-color);
     font-size: 0.98rem;
@@ -147,13 +171,15 @@
     font-weight: 700;
     margin-right: 6px;
   }
+  .card.revealed .answer-inner { display: block; }
 
   .mark-bar {
-    display: flex;
+    display: none;
     gap: 10px;
     align-items: center;
     padding: 2px 20px 18px 62px;
   }
+  .card.revealed .mark-bar { display: flex; }
   .mark-bar .label { color: #6b7785; font-size: 0.82rem; margin-right: 2px; }
   .mark-btn {
     border: 1px solid var(--border);
@@ -228,6 +254,7 @@
     .num { width: 26px; height: 26px; font-size: 0.75rem; }
     .q-text { font-size: 0.95rem; }
 
+    .answer-actions { padding: 6px 14px 14px 14px; }
     .answer-inner { padding: 4px 14px 16px 14px; font-size: 0.94rem; }
     .mark-bar { padding: 2px 14px 16px 14px; flex-wrap: wrap; }
     .mark-btn { padding: 8px 18px; font-size: 0.9rem; }
@@ -1034,8 +1061,16 @@ const progressEl = document.getElementById('progress');
 let order = QA.map((_, i) => i);
 let filter = 'all';
 
-// 채점 결과 저장/복원 (qi -> 'correct' | 'incorrect')
-const STORE_KEY = 'bb_quiz_marks_v1';
+// 채점 결과 저장/복원 — 문항 "내용" 기준 키로 저장하여
+// 문제 섞기·문항 추가/수정·브라우저 재접속에도 채점 상태가 유지됨
+const STORE_KEY = 'bb_quiz_marks_v2';
+function qhash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return 'q' + (h >>> 0).toString(36);
+}
+const keyOf = (qi) => qhash(QA[qi][0]);
+
 let marks = {};
 try { marks = JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { marks = {}; }
 function saveMarks() {
@@ -1043,9 +1078,10 @@ function saveMarks() {
 }
 
 function passesFilter(qi) {
+  const m = marks[keyOf(qi)];
   if (filter === 'all') return true;
-  if (filter === 'unmarked') return !marks[qi];
-  return marks[qi] === filter; // 'correct' | 'incorrect'
+  if (filter === 'unmarked') return !m;
+  return m === filter; // 'correct' | 'incorrect'
 }
 
 function render() {
@@ -1057,7 +1093,7 @@ function render() {
     shown++;
 
     const [q, a] = QA[qi];
-    const mark = marks[qi]; // undefined | 'correct' | 'incorrect'
+    const mark = marks[keyOf(qi)]; // undefined | 'correct' | 'incorrect'
 
     const card = document.createElement('div');
     card.className = 'card' + (mark ? ' ' + mark + ' seen' : '');
@@ -1074,6 +1110,16 @@ function render() {
 
     const answer = document.createElement('div');
     answer.className = 'answer';
+
+    // 정답 확인 버튼 (클릭 전까지 정답 숨김)
+    const actions = document.createElement('div');
+    actions.className = 'answer-actions';
+    actions.innerHTML = '<button class="reveal-btn">정답 확인</button>';
+    actions.querySelector('.reveal-btn').addEventListener('click', (e) => {
+      e.stopPropagation(); reveal(card, answer);
+    });
+    answer.appendChild(actions);
+
     const inner = document.createElement('div');
     inner.className = 'answer-inner';
     inner.textContent = a;
@@ -1112,33 +1158,43 @@ function render() {
 }
 
 function setMark(qi, value) {
-  marks[qi] = (marks[qi] === value) ? undefined : value; // 같은 버튼 다시 누르면 채점 취소
-  if (marks[qi] === undefined) delete marks[qi];
+  const k = keyOf(qi);
+  marks[k] = (marks[k] === value) ? undefined : value; // 같은 버튼 다시 누르면 채점 취소
+  if (marks[k] === undefined) delete marks[k];
   saveMarks();
   render();
 }
 
+// 문항 클릭: 문제만 하이라이트(펼침). 정답은 아직 숨김.
 function toggle(card, answer) {
   const willOpen = !card.classList.contains('open');
 
-  // 다른 카드의 펼쳐진 답변은 모두 접기 (한 번에 하나만 열림)
+  // 다른 카드는 모두 접기 (한 번에 하나만 열림)
   document.querySelectorAll('.card.open').forEach(other => {
     if (other !== card) {
-      other.classList.remove('open');
+      other.classList.remove('open', 'revealed');
       other.querySelector('.answer').style.maxHeight = '0';
     }
   });
 
   card.classList.toggle('open', willOpen);
+  if (!willOpen) card.classList.remove('revealed');
   card.classList.add('seen');
   answer.style.maxHeight = willOpen ? answer.scrollHeight + 'px' : '0';
   updateProgress();
+}
+
+// 정답 확인: 정답 텍스트와 채점 버튼 노출
+function reveal(card, answer) {
+  card.classList.add('open', 'seen', 'revealed');
+  answer.style.maxHeight = answer.scrollHeight + 'px';
 }
 
 function setAll(open) {
   document.querySelectorAll('.card').forEach(card => {
     const answer = card.querySelector('.answer');
     card.classList.toggle('open', open);
+    card.classList.toggle('revealed', open); // 전체 펼치기 = 정답까지 표시
     if (open) card.classList.add('seen');
     answer.style.maxHeight = open ? answer.scrollHeight + 'px' : '0';
   });
@@ -1148,8 +1204,9 @@ function setAll(open) {
 function updateProgress() {
   let correct = 0, incorrect = 0;
   QA.forEach((_, qi) => {
-    if (marks[qi] === 'correct') correct++;
-    else if (marks[qi] === 'incorrect') incorrect++;
+    const m = marks[keyOf(qi)];
+    if (m === 'correct') correct++;
+    else if (m === 'incorrect') incorrect++;
   });
   const graded = correct + incorrect;
   const unmarked = QA.length - graded;
