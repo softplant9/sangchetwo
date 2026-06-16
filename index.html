@@ -1168,10 +1168,9 @@ function passesFilter(qi) {
   else if (filter === 'unmarked') ok = !m;
   else ok = (m === filter); // 'correct' | 'incorrect'
   if (!ok) return false;
-  // 검색어 필터 (질문 + 정답 본문에서 검색)
+  // 검색어 필터 (질문지에서만 검색, 정답 본문은 제외)
   if (searchTerm) {
-    const [q, a] = QA[qi];
-    if (!(q + ' ' + a).toLowerCase().includes(searchTerm)) return false;
+    if (!QA[qi][0].toLowerCase().includes(searchTerm)) return false;
   }
   return true;
 }
