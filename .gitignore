@@ -1,6 +1,7 @@
 ﻿# 개인 원본 문서 — 공개 저장소에서 제외
 Q.hwpx
 *.hwpx
+Q.txt
 
 # OS / OneDrive 임시파일
 ~$*
