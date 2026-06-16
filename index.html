@@ -224,6 +224,62 @@
   .chip.active .cnt { opacity: 1; }
   .chip.wrong.active { background: #c14a4a; border-color: #c14a4a; color: #fff; }
 
+  /* 검색 바 */
+  .searchbar {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .search-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 15px; top: 50%;
+    transform: translateY(-50%);
+    color: #6b7785;
+    font-size: 0.95rem;
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--q-color);
+    font-family: inherit;
+    font-size: 0.92rem;
+    padding: 11px 40px 11px 40px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-input::placeholder { color: #5a6470; }
+  .search-input:focus { border-color: var(--accent); }
+  .search-clear {
+    position: absolute;
+    right: 8px; top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #6b7785;
+    font-size: 1rem;
+    cursor: pointer;
+    display: none;
+    padding: 6px 9px;
+    line-height: 1;
+    font-family: inherit;
+  }
+  .search-clear:hover { color: var(--accent); }
+  .search-wrap.has-text .search-clear { display: block; }
+  mark {
+    background: rgba(78,161,255,0.30);
+    color: #d7e9ff;
+    padding: 0 1px;
+    border-radius: 3px;
+  }
+
   .empty {
     text-align: center;
     color: #6b7785;
@@ -280,6 +336,14 @@
     <button id="reset">순서 초기화</button>
     <button id="resetMarks">채점 초기화</button>
     <span class="progress" id="progress"></span>
+  </div>
+
+  <div class="searchbar">
+    <div class="search-wrap" id="searchWrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search" class="search-input" placeholder="키워드로 문항 검색 (예: 도핑, 골절, CPR)" autocomplete="off">
+      <button class="search-clear" id="searchClear" aria-label="검색어 지우기">✕</button>
+    </div>
   </div>
 
   <div class="filterbar">
@@ -1060,6 +1124,25 @@ const listEl = document.getElementById('list');
 const progressEl = document.getElementById('progress');
 let order = QA.map((_, i) => i);
 let filter = 'all';
+let searchTerm = ''; // 소문자 정규화된 검색어
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+// 검색어와 일치하는 부분을 <mark>로 강조
+function highlight(text) {
+  if (!searchTerm) return escapeHtml(text);
+  const lower = text.toLowerCase();
+  let out = '', i = 0;
+  while (i < text.length) {
+    const idx = lower.indexOf(searchTerm, i);
+    if (idx === -1) { out += escapeHtml(text.slice(i)); break; }
+    out += escapeHtml(text.slice(i, idx));
+    out += '<mark>' + escapeHtml(text.slice(idx, idx + searchTerm.length)) + '</mark>';
+    i = idx + searchTerm.length;
+  }
+  return out;
+}
 
 // 채점 결과 저장/복원 — 문항 "내용" 기준 키로 저장하여
 // 문제 섞기·문항 추가/수정·브라우저 재접속에도 채점 상태가 유지됨
@@ -1079,9 +1162,18 @@ function saveMarks() {
 
 function passesFilter(qi) {
   const m = marks[keyOf(qi)];
-  if (filter === 'all') return true;
-  if (filter === 'unmarked') return !m;
-  return m === filter; // 'correct' | 'incorrect'
+  // 채점 상태 필터
+  let ok;
+  if (filter === 'all') ok = true;
+  else if (filter === 'unmarked') ok = !m;
+  else ok = (m === filter); // 'correct' | 'incorrect'
+  if (!ok) return false;
+  // 검색어 필터 (질문 + 정답 본문에서 검색)
+  if (searchTerm) {
+    const [q, a] = QA[qi];
+    if (!(q + ' ' + a).toLowerCase().includes(searchTerm)) return false;
+  }
+  return true;
 }
 
 function render() {
@@ -1104,7 +1196,7 @@ function render() {
     question.className = 'question';
     question.innerHTML =
       '<div class="num">' + (displayIdx + 1) + '</div>' +
-      '<div class="q-text">' + q + '</div>' +
+      '<div class="q-text">' + highlight(q) + '</div>' +
       '<div class="badge">' + badgeChar + '</div>' +
       '<div class="chevron">⌄</div>';
 
@@ -1148,9 +1240,11 @@ function render() {
   if (shown === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = filter === 'incorrect'
-      ? '오답으로 채점한 문제가 없습니다. 👍'
-      : '해당하는 문제가 없습니다.';
+    empty.textContent = searchTerm
+      ? '"' + searchInput.value.trim() + '" 검색 결과가 없습니다.'
+      : (filter === 'incorrect'
+        ? '오답으로 채점한 문제가 없습니다. 👍'
+        : '해당하는 문제가 없습니다.');
     listEl.appendChild(empty);
   }
 
@@ -1248,6 +1342,25 @@ document.getElementById('resetMarks').addEventListener('click', () => {
 document.querySelectorAll('.chip').forEach(chip => {
   chip.addEventListener('click', () => setFilter(chip.dataset.filter));
 });
+
+const searchInput = document.getElementById('search');
+const searchWrap = document.getElementById('searchWrap');
+searchInput.addEventListener('input', () => {
+  searchTerm = searchInput.value.trim().toLowerCase();
+  searchWrap.classList.toggle('has-text', searchInput.value.length > 0);
+  render();
+});
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { searchInput.value = ''; searchTerm = ''; searchWrap.classList.remove('has-text'); render(); }
+});
+document.getElementById('searchClear').addEventListener('click', () => {
+  searchInput.value = '';
+  searchTerm = '';
+  searchWrap.classList.remove('has-text');
+  searchInput.focus();
+  render();
+});
+
 document.getElementById('total').textContent = QA.length;
 
 render();
