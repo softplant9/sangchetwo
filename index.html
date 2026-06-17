@@ -82,6 +82,30 @@
     margin-left: 4px;
   }
 
+  /* 로그인 / 클라우드 동기화 바 */
+  .authbar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 8px; margin-bottom: 18px;
+  }
+  .auth-form, .auth-user { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .auth-input {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; color: var(--q-color); font-family: inherit; font-size: 0.85rem;
+    min-width: 150px;
+  }
+  .auth-input:focus { outline: none; border-color: var(--accent); }
+  .auth-btn {
+    background: var(--card); color: var(--q-color); border: 1px solid var(--border);
+    border-radius: 999px; padding: 8px 16px; font-size: 0.85rem; cursor: pointer;
+    font-family: inherit; transition: all .12s;
+  }
+  .auth-btn:hover { border-color: var(--accent); }
+  .auth-btn.primary { background: var(--accent); color: #06121f; font-weight: 700; border-color: var(--accent); }
+  .auth-status { color: #54d18c; font-size: 0.85rem; font-weight: 600; }
+  .auth-msg { width: 100%; text-align: center; font-size: 0.8rem; color: #7b8794; min-height: 1em; }
+  .auth-msg.error { color: #ff9a9a; }
+  .auth-msg.ok { color: #54d18c; }
+
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -354,6 +378,20 @@
     <a class="exam-cta" href="exam.html">📝 실전 모의고사 (5문제 랜덤) →</a>
   </header>
 
+  <div class="authbar hidden" id="authbar">
+    <div class="auth-form" id="authForm">
+      <input type="email" id="authEmail" class="auth-input" placeholder="이메일" autocomplete="username">
+      <input type="password" id="authPass" class="auth-input" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
+      <button class="auth-btn primary" id="loginBtn">로그인</button>
+      <button class="auth-btn" id="signupBtn">가입</button>
+    </div>
+    <div class="auth-user hidden" id="authUser">
+      <span class="auth-status" id="authStatus"></span>
+      <button class="auth-btn" id="logoutBtn">로그아웃</button>
+    </div>
+    <span class="auth-msg" id="authMsg"></span>
+  </div>
+
   <div class="toolbar">
     <button id="expandAll">전체 펼치기</button>
     <button id="collapseAll">전체 접기</button>
@@ -384,6 +422,9 @@
   <footer>총 <span id="total"></span>문항 · 채점 결과는 이 브라우저에 자동 저장됩니다</footer>
 </div>
 
+<script src="quiz-data.js"></script>
+<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 // QA 데이터는 quiz-data.js 에 정의됨 (공유)
 
@@ -555,8 +596,10 @@ function render() {
 function setMark(qi, value) {
   const k = keyOf(qi);
   marks[k] = (marks[k] === value) ? undefined : value; // 같은 버튼 다시 누르면 채점 취소
+  const newVal = marks[k];
   if (marks[k] === undefined) delete marks[k];
   saveMarks();
+  cloudUpsert(k, newVal); // 로그인 상태면 클라우드에도 반영
   render();
 }
 
@@ -639,7 +682,7 @@ document.getElementById('shuffle').addEventListener('click', shuffle);
 document.getElementById('reset').addEventListener('click', () => { order = QA.map((_, i) => i); render(); });
 document.getElementById('resetMarks').addEventListener('click', () => {
   if (confirm('모든 채점 결과를 초기화할까요?')) {
-    marks = {}; saveMarks(); render();
+    marks = {}; saveMarks(); cloudClearAll(); render();
   }
 });
 document.querySelectorAll('.chip').forEach(chip => {
@@ -667,6 +710,124 @@ document.getElementById('searchClear').addEventListener('click', () => {
 document.getElementById('total').textContent = QA.length;
 
 render();
+
+// ── 클라우드 동기화 (Supabase) ──────────────────────────────
+// 로그인하면 채점(정답/헷갈림/오답) 기록이 계정에 저장되어
+// 다른 브라우저·기기에서도 그대로 이어집니다.
+// 미설정(supabase-config.js 비어있음) 시에는 기존처럼 이 브라우저에만 저장.
+let sb = null, sbUser = null, sbSyncing = false;
+const sbConfigured = !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY
+  && /^https?:\/\//.test(window.SUPABASE_URL)
+  && !/YOUR_/.test(window.SUPABASE_URL) && !/YOUR_/.test(window.SUPABASE_ANON_KEY));
+
+const authbar = document.getElementById('authbar');
+const authForm = document.getElementById('authForm');
+const authUserEl = document.getElementById('authUser');
+const authStatus = document.getElementById('authStatus');
+const authMsg = document.getElementById('authMsg');
+const footerEl = document.querySelector('footer');
+
+function setAuthMsg(text, kind) {
+  authMsg.textContent = text || '';
+  authMsg.className = 'auth-msg' + (kind ? ' ' + kind : '');
+}
+
+function updateAuthUI() {
+  if (!sbConfigured) { authbar.classList.add('hidden'); return; }
+  authbar.classList.remove('hidden');
+  const inUser = !!sbUser;
+  authForm.classList.toggle('hidden', inUser);
+  authUserEl.classList.toggle('hidden', !inUser);
+  if (inUser) authStatus.textContent = '☁️ ' + sbUser.email;
+  if (footerEl) {
+    footerEl.innerHTML = inUser
+      ? '총 ' + QA.length + '문항 · ☁️ 클라우드 동기화 중 — 어느 기기에서든 같은 계정으로 이어집니다'
+      : '총 ' + QA.length + '문항 · 로그인하면 다른 기기에서도 채점 기록이 이어집니다';
+  }
+}
+
+async function syncFromCloud() {
+  if (!sb || !sbUser || sbSyncing) return;
+  sbSyncing = true;
+  setAuthMsg('동기화 중...');
+  try {
+    const { data, error } = await sb.from('quiz_marks').select('qhash, mark');
+    if (error) throw error;
+    const cloud = {};
+    (data || []).forEach(r => { cloud[r.qhash] = r.mark; });
+    // 로컬에만 있고 클라우드엔 없는 채점은 업로드(최초 로그인 시 기존 기록 보존)
+    const toPush = [];
+    for (const k in marks) {
+      if (!(k in cloud)) { cloud[k] = marks[k]; toPush.push({ user_id: sbUser.id, qhash: k, mark: marks[k] }); }
+    }
+    if (toPush.length) await sb.from('quiz_marks').upsert(toPush, { onConflict: 'user_id,qhash' });
+    marks = cloud;
+    saveMarks();
+    render();
+    setAuthMsg('동기화 완료 · 채점 ' + Object.keys(marks).length + '개', 'ok');
+  } catch (e) {
+    setAuthMsg('동기화 오류: ' + (e.message || e), 'error');
+  } finally {
+    sbSyncing = false;
+  }
+}
+
+async function cloudUpsert(k, value) {
+  if (!sb || !sbUser) return;
+  try {
+    if (value === undefined) {
+      await sb.from('quiz_marks').delete().eq('user_id', sbUser.id).eq('qhash', k);
+    } else {
+      await sb.from('quiz_marks').upsert(
+        { user_id: sbUser.id, qhash: k, mark: value, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,qhash' });
+    }
+  } catch (e) { setAuthMsg('저장 오류: ' + (e.message || e), 'error'); }
+}
+
+async function cloudClearAll() {
+  if (!sb || !sbUser) return;
+  try { await sb.from('quiz_marks').delete().eq('user_id', sbUser.id); } catch (e) {}
+}
+
+if (sbConfigured && window.supabase) {
+  sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  sb.auth.onAuthStateChange((_event, session) => {
+    sbUser = session ? session.user : null;
+    updateAuthUI();
+    if (sbUser) syncFromCloud();
+  });
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPass').value;
+    if (!email || !password) { setAuthMsg('이메일과 비밀번호를 입력하세요', 'error'); return; }
+    setAuthMsg('로그인 중...');
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) setAuthMsg('로그인 실패: ' + error.message, 'error');
+  });
+
+  document.getElementById('signupBtn').addEventListener('click', async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPass').value;
+    if (!email || password.length < 6) { setAuthMsg('이메일과 6자 이상 비밀번호를 입력하세요', 'error'); return; }
+    setAuthMsg('가입 중...');
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) setAuthMsg('가입 실패: ' + error.message, 'error');
+    else if (!data.session) setAuthMsg('가입 메일을 보냈습니다. 메일 인증 후 로그인하세요. (또는 Supabase에서 이메일 인증을 끄면 즉시 로그인)', 'ok');
+    else setAuthMsg('가입 완료 · 자동 로그인됨', 'ok');
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    setAuthMsg('로그아웃됨 (이 브라우저의 로컬 기록은 유지됩니다)', 'ok');
+  });
+} else if (sbConfigured && !window.supabase) {
+  authbar.classList.remove('hidden');
+  setAuthMsg('동기화 라이브러리를 불러오지 못했습니다. 네트워크 확인 후 새로고침하세요.', 'error');
+} else {
+  updateAuthUI(); // 미설정: 로그인 바 숨김 (로컬 저장만 사용)
+}
 </script>
 </body>
 </html>

@@ -3,6 +3,11 @@ Q.hwpx
 *.hwpx
 Q.txt
 
+# 비밀 키 — 절대 커밋 금지 (secret key 등)
+env
+.env
+.env.*
+
 # OS / OneDrive 임시파일
 ~$*
 .DS_Store
