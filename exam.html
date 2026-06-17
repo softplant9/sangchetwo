@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실전 모의고사 · 생체 2급 구술 면접</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --card: #1a212b;
+    --card-hover: #212a36;
+    --accent: #4ea1ff;
+    --accent-soft: #1f3350;
+    --q-color: #e8edf3;
+    --a-color: #b8c4d0;
+    --border: #2a333f;
+    --answer-bg: #141b24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--q-color);
+    line-height: 1.7;
+    padding: 24px 16px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 22px; }
+  header h1 { font-size: 1.45rem; font-weight: 700; margin-bottom: 6px; }
+  header p { color: #7b8794; font-size: 0.9rem; }
+  .back-link {
+    display: inline-block; margin-top: 12px;
+    color: #7b8794; font-size: 0.85rem; text-decoration: none;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 24px;
+  }
+  .hidden { display: none !important; }
+
+  /* 인트로 */
+  .intro-rules {
+    list-style: none; margin: 18px 0 24px; padding: 0;
+    color: var(--a-color); font-size: 0.95rem;
+  }
+  .intro-rules li { padding: 6px 0 6px 26px; position: relative; }
+  .intro-rules li::before { content: "✔"; position: absolute; left: 0; color: var(--accent); }
+  .intro-stat {
+    text-align: center; color: #7b8794; font-size: 0.85rem; margin-bottom: 18px;
+  }
+  .intro-stat b { color: var(--q-color); }
+
+  .big-btn {
+    display: block; width: 100%;
+    background: var(--accent); color: #06121f;
+    border: none; border-radius: 999px;
+    padding: 15px; font-size: 1.05rem; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    transition: filter .15s;
+  }
+  .big-btn:hover { filter: brightness(1.1); }
+  .ghost-btn {
+    display: block; width: 100%;
+    background: var(--card); color: var(--q-color);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 13px; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; font-family: inherit; margin-top: 10px;
+    transition: border-color .15s;
+  }
+  .ghost-btn:hover { border-color: var(--accent); }
+
+  /* 진행 표시 */
+  .progress-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .q-counter { font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+  .dots { display: flex; gap: 7px; }
+  .dot {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--border);
+  }
+  .dot.correct { background: #2e7d52; }
+  .dot.partial { background: #b8862b; }
+  .dot.incorrect { background: #c14a4a; }
+  .dot.active { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* 문제 */
+  .q-num { color: #7b8794; font-size: 0.8rem; font-weight: 700; letter-spacing: .04em; }
+  .q-text {
+    font-size: 1.2rem; font-weight: 600; color: var(--q-color);
+    margin: 6px 0 22px; line-height: 1.6;
+  }
+
+  /* 정답 영역 */
+  .answer-box {
+    background: var(--answer-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 18px;
+    margin-bottom: 20px;
+    color: var(--a-color);
+    font-size: 1.0rem;
+  }
+  .answer-box .label {
+    display: block; color: #7b8794; font-size: 0.78rem; font-weight: 700;
+    letter-spacing: .05em; margin-bottom: 8px;
+  }
+  .kw {
+    background: linear-gradient(transparent 58%, rgba(255,221,87,0.42) 58%);
+    color: #f3f6fa; font-weight: 600; padding: 0 1px; border-radius: 2px;
+  }
+
+  /* 채점 버튼 */
+  .grade-row { display: flex; gap: 10px; }
+  .grade-btn {
+    flex: 1;
+    background: var(--card); color: var(--a-color);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 13px; font-size: 0.98rem; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: all .12s;
+  }
+  .grade-btn.g-correct:hover { border-color: #54d18c; color: #54d18c; }
+  .grade-btn.g-partial:hover { border-color: #ffce6b; color: #ffce6b; }
+  .grade-btn.g-incorrect:hover { border-color: #ff7a7a; color: #ff7a7a; }
+
+  .hint { text-align: center; color: #7b8794; font-size: 0.85rem; margin-top: 4px; }
+
+  /* 결과 */
+  .score-headline { text-align: center; font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+  .score-rate { text-align: center; font-size: 2.6rem; font-weight: 800; margin: 8px 0; }
+  .score-rate.pass { color: #54d18c; }
+  .score-rate.fail { color: #ff7a7a; }
+  .score-sub { text-align: center; color: var(--a-color); font-size: 0.95rem; margin-bottom: 4px; }
+  .score-note { text-align: center; color: #7b8794; font-size: 0.85rem; margin-bottom: 22px; }
+
+  .result-item {
+    border: 1px solid var(--border); border-radius: 12px;
+    margin-bottom: 10px; overflow: hidden;
+  }
+  .result-q {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 14px 16px; cursor: pointer;
+    background: var(--card);
+  }
+  .result-q:hover { background: var(--card-hover); }
+  .result-badge {
+    flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 0.85rem; color: #fff; margin-top: 2px;
+  }
+  .result-badge.correct { background: #2e7d52; }
+  .result-badge.partial { background: #b8862b; }
+  .result-badge.incorrect { background: #9c3636; }
+  .result-qtext { flex: 1; font-size: 0.98rem; font-weight: 600; }
+  .result-chevron { color: #6b7785; flex-shrink: 0; transition: transform .2s; }
+  .result-item.open .result-chevron { transform: rotate(180deg); }
+  .result-answer {
+    max-height: 0; overflow: hidden; transition: max-height .25s ease;
+    background: var(--answer-bg);
+  }
+  .result-answer .inner { padding: 16px; color: var(--a-color); font-size: 0.95rem; }
+
+  .result-actions { margin-top: 22px; }
+
+  @media (max-width: 600px) {
+    .panel { padding: 22px 16px; }
+    .q-text { font-size: 1.1rem; }
+    .grade-btn { padding: 12px 6px; font-size: 0.9rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📝 실전 모의고사</h1>
+    <p>실제 시험처럼 무작위 5문제가 출제됩니다</p>
+    <a class="back-link" href="index.html">← 전체 문제로 돌아가기</a>
+  </header>
+
+  <!-- 인트로 화면 -->
+  <div class="panel" id="introScreen">
+    <ul class="intro-rules">
+      <li>전체 문항 중 <b>무작위 5문제</b>가 출제됩니다.</li>
+      <li>문제를 보고 머릿속(또는 소리 내어)으로 답한 뒤, <b>정답 확인</b>을 누르세요.</li>
+      <li>모범답안과 비교해 <b>정답 / 헷갈림 / 오답</b>으로 스스로 채점합니다.</li>
+      <li>마지막에 <b>정답률과 채점 결과</b>를 확인할 수 있습니다.</li>
+    </ul>
+    <p class="intro-stat" id="introStat"></p>
+    <button class="big-btn" id="startBtn">시험 시작</button>
+  </div>
+
+  <!-- 문제 화면 -->
+  <div class="panel hidden" id="quizScreen">
+    <div class="progress-row">
+      <span class="q-counter" id="qCounter"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="q-num" id="qNum"></div>
+    <div class="q-text" id="qText"></div>
+
+    <div id="revealArea">
+      <button class="big-btn" id="revealBtn">정답 확인</button>
+    </div>
+
+    <div id="answerArea" class="hidden">
+      <div class="answer-box">
+        <span class="label">모범답안</span>
+        <span id="answerText"></span>
+      </div>
+      <div class="grade-row">
+        <button class="grade-btn g-correct" data-g="correct">⭕ 정답</button>
+        <button class="grade-btn g-partial" data-g="partial">🔺 헷갈림</button>
+        <button class="grade-btn g-incorrect" data-g="incorrect">❌ 오답</button>
+      </div>
+      <p class="hint">채점하면 다음 문제로 넘어갑니다</p>
+    </div>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div class="panel hidden" id="resultScreen">
+    <div class="score-headline">채점 결과</div>
+    <div class="score-rate" id="scoreRate"></div>
+    <div class="score-sub" id="scoreSub"></div>
+    <div class="score-note" id="scoreNote"></div>
+    <div id="resultList"></div>
+    <div class="result-actions">
+      <button class="big-btn" id="retryBtn">다시 응시 (새 문제 5개)</button>
+      <a class="ghost-btn" href="index.html" style="text-align:center; text-decoration:none;">전체 문제로 돌아가기</a>
+    </div>
+  </div>
+</div>
+
+<script src="quiz-data.js"></script>
+<script>
+const TOTAL = 5;             // 출제 문항 수
+const PASS_RATE = 60;        // 합격 기준 정답률(%) — 만점의 60% 이상
+
+// ── 공용 유틸 (index.html과 동일 로직) ──────────────────────
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function qhash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return 'q' + (h >>> 0).toString(36);
+}
+// 답변 내 핵심 키워드(형광펜) 강조
+function keyize(answer, question) {
+  const kws = (typeof KW_MAP !== 'undefined' && KW_MAP[qhash(question)]) || [];
+  if (!kws.length) return escapeHtml(answer);
+  const ranges = [];
+  for (const kw of kws) {
+    let from = 0, idx;
+    while ((idx = answer.indexOf(kw, from)) !== -1) { ranges.push([idx, idx + kw.length]); from = idx + kw.length; }
+  }
+  if (!ranges.length) return escapeHtml(answer);
+  ranges.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const merged = []; let curEnd = -1;
+  for (const [st, en] of ranges) {
+    if (st >= curEnd) { merged.push([st, en]); curEnd = en; }
+    else if (en > curEnd) { merged[merged.length - 1][1] = en; curEnd = en; }
+  }
+  let out = "", last = 0;
+  for (const [st, en] of merged) {
+    out += escapeHtml(answer.slice(last, st));
+    out += '<span class="kw">' + escapeHtml(answer.slice(st, en)) + '</span>';
+    last = en;
+  }
+  out += escapeHtml(answer.slice(last));
+  return out;
+}
+
+// ── 응시 이력 (간단 저장) ───────────────────────────────────
+const HIST_KEY = 'bb_exam_history_v1';
+function loadHist() { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch (e) { return []; } }
+function saveHist(h) { try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(-50))); } catch (e) {} }
+
+// ── 시험 상태 ──────────────────────────────────────────────
+let pick = [];      // 출제된 문항 인덱스 배열
+let cur = 0;        // 현재 문항 (0-based)
+let grades = [];    // 각 문항 채점 결과
+
+const $ = id => document.getElementById(id);
+
+function pickQuestions(n) {
+  const idx = QA.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return idx.slice(0, Math.min(n, idx.length));
+}
+
+function showScreen(name) {
+  $('introScreen').classList.toggle('hidden', name !== 'intro');
+  $('quizScreen').classList.toggle('hidden', name !== 'quiz');
+  $('resultScreen').classList.toggle('hidden', name !== 'result');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderIntro() {
+  const hist = loadHist();
+  if (hist.length) {
+    const best = Math.max(...hist.map(h => h.rate));
+    $('introStat').innerHTML = '지금까지 <b>' + hist.length + '회</b> 응시 · 최고 정답률 <b>' + best + '%</b>';
+  } else {
+    $('introStat').innerHTML = '총 <b>' + QA.length + '문항</b> 중에서 출제됩니다';
+  }
+  showScreen('intro');
+}
+
+function startExam() {
+  pick = pickQuestions(TOTAL);
+  cur = 0;
+  grades = new Array(pick.length).fill(null);
+  showScreen('quiz');
+  renderQuestion();
+}
+
+function renderDots() {
+  const dots = $('dots');
+  dots.innerHTML = '';
+  pick.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (grades[i] ? ' ' + grades[i] : '') + (i === cur ? ' active' : '');
+    dots.appendChild(d);
+  });
+}
+
+function renderQuestion() {
+  const qi = pick[cur];
+  const [q] = QA[qi];
+  $('qCounter').textContent = '문제 ' + (cur + 1) + ' / ' + pick.length;
+  $('qNum').textContent = 'Q' + (cur + 1);
+  $('qText').textContent = q;
+  $('answerArea').classList.add('hidden');
+  $('revealArea').classList.remove('hidden');
+  renderDots();
+}
+
+function revealAnswer() {
+  const qi = pick[cur];
+  const [q, a] = QA[qi];
+  $('answerText').innerHTML = keyize(a, q);
+  $('revealArea').classList.add('hidden');
+  $('answerArea').classList.remove('hidden');
+}
+
+function grade(value) {
+  grades[cur] = value;
+  if (cur < pick.length - 1) {
+    cur++;
+    renderQuestion();
+  } else {
+    renderResult();
+  }
+}
+
+function renderResult() {
+  const correct = grades.filter(g => g === 'correct').length;
+  const partial = grades.filter(g => g === 'partial').length;
+  const incorrect = grades.filter(g => g === 'incorrect').length;
+  // 정답률: 정답 1점, 헷갈림 0.5점 환산
+  const rate = Math.round(((correct + partial * 0.5) / pick.length) * 100);
+  const passed = rate >= PASS_RATE;
+
+  const rateEl = $('scoreRate');
+  rateEl.textContent = rate + '%';
+  rateEl.className = 'score-rate ' + (passed ? 'pass' : 'fail');
+
+  $('scoreSub').textContent =
+    pick.length + '문제 중  ⭕ ' + correct + '  ·  🔺 ' + partial + '  ·  ❌ ' + incorrect;
+  $('scoreNote').textContent = passed
+    ? '합격 기준(' + PASS_RATE + '%) 통과! 이 컨디션을 유지하세요 💪'
+    : '합격 기준(' + PASS_RATE + '%)에 조금 못 미쳐요. 다시 도전해 보세요!';
+
+  // 문항별 결과 목록
+  const list = $('resultList');
+  list.innerHTML = '';
+  const badgeChar = { correct: 'O', partial: '△', incorrect: 'X' };
+  pick.forEach((qi, i) => {
+    const [q, a] = QA[qi];
+    const g = grades[i] || 'incorrect';
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    item.innerHTML =
+      '<div class="result-q">' +
+        '<div class="result-badge ' + g + '">' + badgeChar[g] + '</div>' +
+        '<div class="result-qtext">' + escapeHtml(q) + '</div>' +
+        '<div class="result-chevron">⌄</div>' +
+      '</div>' +
+      '<div class="result-answer"><div class="inner">' + keyize(a, q) + '</div></div>';
+    const head = item.querySelector('.result-q');
+    const ans = item.querySelector('.result-answer');
+    head.addEventListener('click', () => {
+      const open = item.classList.toggle('open');
+      ans.style.maxHeight = open ? ans.scrollHeight + 'px' : '0';
+    });
+    list.appendChild(item);
+  });
+
+  // 이력 저장
+  const hist = loadHist();
+  hist.push({ rate: rate, correct: correct, partial: partial, incorrect: incorrect });
+  saveHist(hist);
+
+  showScreen('result');
+}
+
+// ── 이벤트 ────────────────────────────────────────────────
+$('startBtn').addEventListener('click', startExam);
+$('revealBtn').addEventListener('click', revealAnswer);
+$('retryBtn').addEventListener('click', startExam);
+document.querySelectorAll('.grade-btn').forEach(btn => {
+  btn.addEventListener('click', () => grade(btn.dataset.g));
+});
+
+renderIntro();
+</script>
+</body>
+</html>
