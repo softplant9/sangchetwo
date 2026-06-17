@@ -102,8 +102,10 @@
     margin-top: 1px;
   }
   .card.correct .num { background: #2e7d52; color: #fff; }
+  .card.partial .num { background: #b8862b; color: #fff; }
   .card.incorrect .num { background: #9c3636; color: #fff; }
   .card.correct { border-color: #2e7d52; }
+  .card.partial { border-color: #c79a3a; }
   .card.incorrect { border-color: #c14a4a; }
   .q-text {
     flex: 1;
@@ -120,6 +122,7 @@
     text-align: center;
   }
   .card.correct .badge { color: #54d18c; }
+  .card.partial .badge { color: #ffce6b; }
   .card.incorrect .badge { color: #ff7a7a; }
   .chevron {
     flex-shrink: 0;
@@ -202,8 +205,10 @@
     transition: all .12s;
   }
   .mark-btn.correct-btn:hover { border-color: #54d18c; color: #54d18c; }
+  .mark-btn.partial-btn:hover { border-color: #ffce6b; color: #ffce6b; }
   .mark-btn.incorrect-btn:hover { border-color: #ff7a7a; color: #ff7a7a; }
   .card.correct .mark-btn.correct-btn { background: #2e7d52; border-color: #2e7d52; color: #fff; }
+  .card.partial .mark-btn.partial-btn { background: #b8862b; border-color: #b8862b; color: #fff; }
   .card.incorrect .mark-btn.incorrect-btn { background: #9c3636; border-color: #9c3636; color: #fff; }
 
   /* 필터 바 */
@@ -231,6 +236,7 @@
   .chip .cnt { opacity: .7; font-weight: 700; }
   .chip.active .cnt { opacity: 1; }
   .chip.wrong.active { background: #c14a4a; border-color: #c14a4a; color: #fff; }
+  .chip.maybe.active { background: #b8862b; border-color: #b8862b; color: #fff; }
 
   /* 검색 바 */
   .searchbar {
@@ -358,6 +364,7 @@
     <button class="chip all active" data-filter="all">전체 <span class="cnt" id="cnt-all"></span></button>
     <button class="chip unmarked" data-filter="unmarked">미채점 <span class="cnt" id="cnt-unmarked"></span></button>
     <button class="chip correct" data-filter="correct">정답 <span class="cnt" id="cnt-correct"></span></button>
+    <button class="chip maybe" data-filter="partial">헷갈림 <span class="cnt" id="cnt-partial"></span></button>
     <button class="chip wrong" data-filter="incorrect">오답만 <span class="cnt" id="cnt-incorrect"></span></button>
   </div>
 
@@ -1205,7 +1212,7 @@ function passesFilter(qi) {
   let ok;
   if (filter === 'all') ok = true;
   else if (filter === 'unmarked') ok = !m;
-  else ok = (m === filter); // 'correct' | 'incorrect'
+  else ok = (m === filter); // 'correct' | 'partial' | 'incorrect'
   if (!ok) return false;
   // 검색어 필터 (질문지에서만 검색, 정답 본문은 제외)
   if (searchTerm) {
@@ -1223,12 +1230,12 @@ function render() {
     shown++;
 
     const [q, a] = QA[qi];
-    const mark = marks[keyOf(qi)]; // undefined | 'correct' | 'incorrect'
+    const mark = marks[keyOf(qi)]; // undefined | 'correct' | 'partial' | 'incorrect'
 
     const card = document.createElement('div');
     card.className = 'card' + (mark ? ' ' + mark + ' seen' : '');
 
-    const badgeChar = mark === 'correct' ? 'O' : (mark === 'incorrect' ? 'X' : '');
+    const badgeChar = mark === 'correct' ? 'O' : (mark === 'incorrect' ? 'X' : (mark === 'partial' ? '△' : ''));
 
     const question = document.createElement('div');
     question.className = 'question';
@@ -1260,9 +1267,13 @@ function render() {
     markBar.innerHTML =
       '<span class="label">채점:</span>' +
       '<button class="mark-btn correct-btn">⭕ 정답</button>' +
+      '<button class="mark-btn partial-btn">🔺 헷갈림</button>' +
       '<button class="mark-btn incorrect-btn">❌ 오답</button>';
     markBar.querySelector('.correct-btn').addEventListener('click', (e) => {
       e.stopPropagation(); setMark(qi, 'correct');
+    });
+    markBar.querySelector('.partial-btn').addEventListener('click', (e) => {
+      e.stopPropagation(); setMark(qi, 'partial');
     });
     markBar.querySelector('.incorrect-btn').addEventListener('click', (e) => {
       e.stopPropagation(); setMark(qi, 'incorrect');
@@ -1334,22 +1345,24 @@ function setAll(open) {
 }
 
 function updateProgress() {
-  let correct = 0, incorrect = 0;
+  let correct = 0, partial = 0, incorrect = 0;
   QA.forEach((_, qi) => {
     const m = marks[keyOf(qi)];
     if (m === 'correct') correct++;
+    else if (m === 'partial') partial++;
     else if (m === 'incorrect') incorrect++;
   });
-  const graded = correct + incorrect;
+  const graded = correct + partial + incorrect;
   const unmarked = QA.length - graded;
 
   document.getElementById('cnt-all').textContent = QA.length;
   document.getElementById('cnt-unmarked').textContent = unmarked;
   document.getElementById('cnt-correct').textContent = correct;
+  document.getElementById('cnt-partial').textContent = partial;
   document.getElementById('cnt-incorrect').textContent = incorrect;
 
   progressEl.textContent = '채점 ' + graded + ' / ' + QA.length +
-    '  ·  정답 ' + correct + ' · 오답 ' + incorrect;
+    '  ·  정답 ' + correct + ' · 헷갈림 ' + partial + ' · 오답 ' + incorrect;
 }
 
 function setFilter(f) {
