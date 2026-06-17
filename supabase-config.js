@@ -8,5 +8,5 @@
 // ※ 값을 채우기 전(YOUR_... 상태)에는 로그인 바가 숨겨지고
 //   기존처럼 이 브라우저(localStorage)에만 저장됩니다.
 // ─────────────────────────────────────────────────────────────
-window.SUPABASE_URL = 'YOUR_SUPABASE_URL';  // ← 프로젝트 URL 입력 필요 (예: https://xxxx.supabase.co)
+window.SUPABASE_URL = 'https://frsmcnzpkdnhicpwossp.supabase.co';
 window.SUPABASE_ANON_KEY = 'sb_publishable_11J2U67BNtQBGtzMEcrSFg_oMFb6VlT';
