@@ -8,6 +8,9 @@ env
 .env
 .env.*
 
+# 로컬 전용 테스트 서버 (배포 제외)
+_localserver.cjs
+
 # OS / OneDrive 임시파일
 ~$*
 .DS_Store

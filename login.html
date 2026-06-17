@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 · 생체 2급 구술 면접 대비</title>
+<style>
+  :root {
+    --bg: #0f1419; --card: #1a212b; --accent: #4ea1ff; --accent-soft: #1f3350;
+    --q-color: #e8edf3; --a-color: #b8c4d0; --border: #2a333f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+    background: var(--bg); color: var(--q-color); line-height: 1.7;
+    padding: 24px 16px; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { width: 100%; max-width: 400px; }
+  header { text-align: center; margin-bottom: 22px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+  header p { color: #7b8794; font-size: 0.9rem; }
+
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 26px 22px; }
+  .hidden { display: none !important; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 0.8rem; color: #7b8794; margin-bottom: 5px; font-weight: 600; }
+  .field input {
+    width: 100%; background: #141b24; border: 1px solid var(--border); border-radius: 9px;
+    padding: 11px 13px; color: var(--q-color); font-family: inherit; font-size: 0.95rem;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+
+  .big-btn {
+    display: block; width: 100%; background: var(--accent); color: #06121f; border: none;
+    border-radius: 999px; padding: 13px; font-size: 1rem; font-weight: 700; cursor: pointer;
+    font-family: inherit; transition: filter .15s; text-align: center; text-decoration: none;
+  }
+  .big-btn:hover { filter: brightness(1.1); }
+  .ghost-btn {
+    display: block; width: 100%; background: var(--card); color: var(--q-color);
+    border: 1px solid var(--border); border-radius: 999px; padding: 12px; font-size: 0.92rem;
+    font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 10px; text-align: center; text-decoration: none;
+    transition: border-color .15s;
+  }
+  .ghost-btn:hover { border-color: var(--accent); }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-row .big-btn { flex: 1; }
+  .btn-row .secondary {
+    flex: 1; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+    border-radius: 999px; padding: 13px; font-size: 1rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: filter .15s;
+  }
+  .btn-row .secondary:hover { filter: brightness(1.15); }
+
+  .msg { min-height: 1.2em; margin-top: 14px; text-align: center; font-size: 0.85rem; color: #7b8794; }
+  .msg.error { color: #ff9a9a; }
+  .msg.ok { color: #54d18c; }
+
+  .back { display: block; text-align: center; margin-top: 18px; color: #7b8794; font-size: 0.85rem; text-decoration: none; }
+  .back:hover { color: var(--accent); }
+  .whoami { text-align: center; font-size: 1.05rem; margin-bottom: 18px; }
+  .whoami b { color: #54d18c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>로그인</h1>
+    <p>채점 기록을 모든 기기에서 이어서 보기</p>
+  </header>
+
+  <!-- 로그인/가입 폼 -->
+  <div class="panel" id="formPanel">
+    <div class="field">
+      <label for="email">이메일</label>
+      <input type="email" id="email" autocomplete="username" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label for="password">비밀번호 (6자 이상)</label>
+      <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <div class="btn-row">
+      <button class="big-btn" id="loginBtn">로그인</button>
+      <button class="secondary" id="signupBtn">가입</button>
+    </div>
+    <p class="msg" id="msg"></p>
+    <a class="back" href="index.html">← 로그인 없이 둘러보기</a>
+  </div>
+
+  <!-- 이미 로그인된 경우 -->
+  <div class="panel hidden" id="loggedInPanel">
+    <p class="whoami">☁️ <b id="whoami"></b><br>로그인되어 있습니다</p>
+    <a class="big-btn" href="index.html">학습 페이지로 이동 →</a>
+    <button class="ghost-btn" id="logoutBtn">로그아웃</button>
+  </div>
+</div>
+
+<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+function setMsg(t, k) { $('msg').textContent = t || ''; $('msg').className = 'msg' + (k ? ' ' + k : ''); }
+
+const sbConfigured = !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY
+  && /^https?:\/\//.test(window.SUPABASE_URL)
+  && !/YOUR_/.test(window.SUPABASE_URL) && !/YOUR_/.test(window.SUPABASE_ANON_KEY));
+
+let sb = null;
+
+function showLoggedIn(user) {
+  $('formPanel').classList.add('hidden');
+  $('loggedInPanel').classList.remove('hidden');
+  $('whoami').textContent = user.email;
+}
+
+if (sbConfigured && window.supabase) {
+  sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+  sb.auth.getSession().then(({ data }) => {
+    if (data.session) showLoggedIn(data.session.user);
+  });
+
+  $('loginBtn').addEventListener('click', async () => {
+    const email = $('email').value.trim();
+    const password = $('password').value;
+    if (!email || !password) { setMsg('이메일과 비밀번호를 입력하세요', 'error'); return; }
+    setMsg('로그인 중...');
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { setMsg('로그인 실패: ' + error.message, 'error'); return; }
+    setMsg('로그인 성공! 이동합니다...', 'ok');
+    location.href = 'index.html';
+  });
+
+  $('signupBtn').addEventListener('click', async () => {
+    const email = $('email').value.trim();
+    const password = $('password').value;
+    if (!email || password.length < 6) { setMsg('이메일과 6자 이상 비밀번호를 입력하세요', 'error'); return; }
+    setMsg('가입 중...');
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) { setMsg('가입 실패: ' + error.message, 'error'); return; }
+    if (data.session) { setMsg('가입 완료! 이동합니다...', 'ok'); location.href = 'index.html'; }
+    else setMsg('가입 메일을 보냈습니다. 메일 인증 후 로그인하세요.', 'ok');
+  });
+
+  $('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+  });
+
+  // 엔터키로 로그인 (표준 폼 동작)
+  [$('email'), $('password')].forEach(el => el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); $('loginBtn').click(); }
+  }));
+  $('email').focus();
+} else {
+  setMsg('클라우드 동기화가 아직 설정되지 않았습니다.', 'error');
+  $('loginBtn').disabled = true;
+  $('signupBtn').disabled = true;
+}
+</script>
+</body>
+</html>

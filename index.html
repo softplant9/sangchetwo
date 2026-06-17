@@ -27,6 +27,7 @@
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 780px; margin: 0 auto; }
+  .hidden { display: none !important; }
 
   header {
     text-align: center;
@@ -82,27 +83,23 @@
     margin-left: 4px;
   }
 
-  /* 로그인 / 클라우드 동기화 바 */
-  .authbar {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
-    gap: 8px; margin-bottom: 18px;
+  /* 로그인 / 로그아웃 (우측 상단, 작게) */
+  .topbar {
+    display: flex; justify-content: flex-end; align-items: center;
+    min-height: 30px; margin-bottom: 6px;
   }
-  .auth-form, .auth-user { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .auth-input {
-    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 8px 12px; color: var(--q-color); font-family: inherit; font-size: 0.85rem;
-    min-width: 150px;
-  }
-  .auth-input:focus { outline: none; border-color: var(--accent); }
+  .authbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+  .auth-user { display: flex; align-items: center; gap: 8px; }
   .auth-btn {
     background: var(--card); color: var(--q-color); border: 1px solid var(--border);
-    border-radius: 999px; padding: 8px 16px; font-size: 0.85rem; cursor: pointer;
-    font-family: inherit; transition: all .12s;
+    border-radius: 999px; padding: 5px 13px; font-size: 0.8rem; cursor: pointer;
+    font-family: inherit; transition: all .12s; text-decoration: none; line-height: 1.4;
   }
-  .auth-btn:hover { border-color: var(--accent); }
+  .auth-btn:hover { border-color: var(--accent); color: var(--accent); }
   .auth-btn.primary { background: var(--accent); color: #06121f; font-weight: 700; border-color: var(--accent); }
-  .auth-status { color: #54d18c; font-size: 0.85rem; font-weight: 600; }
-  .auth-msg { width: 100%; text-align: center; font-size: 0.8rem; color: #7b8794; min-height: 1em; }
+  .auth-btn.primary:hover { filter: brightness(1.08); color: #06121f; }
+  .auth-status { color: #54d18c; font-size: 0.8rem; font-weight: 600; }
+  .auth-msg { font-size: 0.75rem; color: #7b8794; }
   .auth-msg.error { color: #ff9a9a; }
   .auth-msg.ok { color: #54d18c; }
 
@@ -372,25 +369,21 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="topbar">
+    <div class="authbar hidden" id="authbar">
+      <span class="auth-msg" id="authMsg"></span>
+      <a class="auth-btn primary" id="loginLink" href="login.html">로그인 / 가입</a>
+      <span class="auth-user hidden" id="authUser">
+        <span class="auth-status" id="authStatus"></span>
+        <button class="auth-btn" id="logoutBtn">로그아웃</button>
+      </span>
+    </div>
+  </div>
   <header>
     <h1>생체 2급 구술 면접 테스트</h1>
     <p>질문에 답한 뒤 클릭해 정답을 확인하고, 정답/오답을 채점하세요</p>
     <a class="exam-cta" href="exam.html">📝 실전 모의고사 (5문제 랜덤) →</a>
   </header>
-
-  <div class="authbar hidden" id="authbar">
-    <div class="auth-form" id="authForm">
-      <input type="email" id="authEmail" class="auth-input" placeholder="이메일" autocomplete="username">
-      <input type="password" id="authPass" class="auth-input" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
-      <button class="auth-btn primary" id="loginBtn">로그인</button>
-      <button class="auth-btn" id="signupBtn">가입</button>
-    </div>
-    <div class="auth-user hidden" id="authUser">
-      <span class="auth-status" id="authStatus"></span>
-      <button class="auth-btn" id="logoutBtn">로그아웃</button>
-    </div>
-    <span class="auth-msg" id="authMsg"></span>
-  </div>
 
   <div class="toolbar">
     <button id="expandAll">전체 펼치기</button>
@@ -721,22 +714,28 @@ const sbConfigured = !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY
   && !/YOUR_/.test(window.SUPABASE_URL) && !/YOUR_/.test(window.SUPABASE_ANON_KEY));
 
 const authbar = document.getElementById('authbar');
-const authForm = document.getElementById('authForm');
+const loginLink = document.getElementById('loginLink');
 const authUserEl = document.getElementById('authUser');
 const authStatus = document.getElementById('authStatus');
 const authMsg = document.getElementById('authMsg');
 const footerEl = document.querySelector('footer');
 
+let _authMsgTimer = null;
 function setAuthMsg(text, kind) {
   authMsg.textContent = text || '';
   authMsg.className = 'auth-msg' + (kind ? ' ' + kind : '');
+  if (_authMsgTimer) { clearTimeout(_authMsgTimer); _authMsgTimer = null; }
+  // 오류가 아닌 상태 메시지는 잠시 뒤 자동으로 사라짐(일반적인 토스트 동작)
+  if (text && kind !== 'error') {
+    _authMsgTimer = setTimeout(() => { authMsg.textContent = ''; authMsg.className = 'auth-msg'; }, 3500);
+  }
 }
 
 function updateAuthUI() {
   if (!sbConfigured) { authbar.classList.add('hidden'); return; }
   authbar.classList.remove('hidden');
   const inUser = !!sbUser;
-  authForm.classList.toggle('hidden', inUser);
+  loginLink.classList.toggle('hidden', inUser);
   authUserEl.classList.toggle('hidden', !inUser);
   if (inUser) authStatus.textContent = '☁️ ' + sbUser.email;
   if (footerEl) {
@@ -798,29 +797,11 @@ if (sbConfigured && window.supabase) {
     if (sbUser) syncFromCloud();
   });
 
-  document.getElementById('loginBtn').addEventListener('click', async () => {
-    const email = document.getElementById('authEmail').value.trim();
-    const password = document.getElementById('authPass').value;
-    if (!email || !password) { setAuthMsg('이메일과 비밀번호를 입력하세요', 'error'); return; }
-    setAuthMsg('로그인 중...');
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) setAuthMsg('로그인 실패: ' + error.message, 'error');
-  });
-
-  document.getElementById('signupBtn').addEventListener('click', async () => {
-    const email = document.getElementById('authEmail').value.trim();
-    const password = document.getElementById('authPass').value;
-    if (!email || password.length < 6) { setAuthMsg('이메일과 6자 이상 비밀번호를 입력하세요', 'error'); return; }
-    setAuthMsg('가입 중...');
-    const { data, error } = await sb.auth.signUp({ email, password });
-    if (error) setAuthMsg('가입 실패: ' + error.message, 'error');
-    else if (!data.session) setAuthMsg('가입 메일을 보냈습니다. 메일 인증 후 로그인하세요. (또는 Supabase에서 이메일 인증을 끄면 즉시 로그인)', 'ok');
-    else setAuthMsg('가입 완료 · 자동 로그인됨', 'ok');
-  });
-
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await sb.auth.signOut();
-    setAuthMsg('로그아웃됨 (이 브라우저의 로컬 기록은 유지됩니다)', 'ok');
+    // 다른 계정과 섞이지 않도록 이 브라우저의 캐시 채점을 비우고 로그인 페이지로 이동
+    marks = {}; saveMarks();
+    location.href = 'login.html';
   });
 } else if (sbConfigured && !window.supabase) {
   authbar.classList.remove('hidden');

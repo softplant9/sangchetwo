@@ -36,6 +36,15 @@
     color: #7b8794; font-size: 0.85rem; text-decoration: none;
   }
   .back-link:hover { color: var(--accent); }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; min-height: 30px; margin-bottom: 6px; }
+  .exam-auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; font-size: 0.82rem; }
+  .ex-auth-user { display: inline-flex; align-items: center; gap: 8px; color: #54d18c; }
+  .ex-auth-btn {
+    background: var(--card); border: 1px solid var(--border); color: var(--q-color);
+    border-radius: 999px; padding: 5px 13px; font-size: 0.8rem; cursor: pointer;
+    font-family: inherit; text-decoration: none; transition: all .12s; line-height: 1.4;
+  }
+  .ex-auth-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* 연속 만점 진행 표시 (상단 고정 띠) */
   .streak-bar {
@@ -196,6 +205,12 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="topbar">
+    <div class="exam-auth hidden" id="examAuth">
+      <a class="ex-auth-btn" id="exLoginLink" href="login.html">로그인 / 가입</a>
+      <span class="ex-auth-user hidden" id="exAuthUser">☁️ <span id="exWho"></span> <button class="ex-auth-btn" id="exLogoutBtn">로그아웃</button></span>
+    </div>
+  </div>
   <header>
     <h1>🔥 실전 챌린지</h1>
     <p>무작위 5문제 만점을 <b>5번 연속</b> 달성하면 합격!</p>
@@ -274,6 +289,8 @@
 <div id="confetti"></div>
 
 <script src="quiz-data.js"></script>
+<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 const Q_PER_ROUND = 5;     // 라운드당 문항 수
 const ROUNDS_TO_WIN = 5;   // 연속 만점 목표 라운드 수
@@ -546,6 +563,25 @@ document.querySelectorAll('.grade-btn').forEach(btn => {
 });
 
 renderIntro();
+
+// ── 계정 상태 표시 (로그인/로그아웃) ───────────────────────
+// 실전 챌린지 기록은 이 기기에 저장됩니다. (계정 표시는 일관성을 위해 제공)
+(function () {
+  const sbConfigured = !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY
+    && /^https?:\/\//.test(window.SUPABASE_URL)
+    && !/YOUR_/.test(window.SUPABASE_URL) && !/YOUR_/.test(window.SUPABASE_ANON_KEY));
+  if (!sbConfigured || !window.supabase) return;
+  $('examAuth').classList.remove('hidden');
+  const sbx = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  function paint(user) {
+    $('exLoginLink').classList.toggle('hidden', !!user);
+    $('exAuthUser').classList.toggle('hidden', !user);
+    if (user) $('exWho').textContent = user.email;
+  }
+  sbx.auth.getSession().then(({ data }) => paint(data.session ? data.session.user : null));
+  sbx.auth.onAuthStateChange((_e, s) => paint(s ? s.user : null));
+  $('exLogoutBtn').addEventListener('click', async () => { await sbx.auth.signOut(); location.href = 'login.html'; });
+})();
 </script>
 </body>
 </html>
