@@ -76,6 +76,19 @@
     font-family: inherit;
   }
   .toolbar button:hover { background: var(--card-hover); border-color: var(--accent); }
+  .toolbar select {
+    background: var(--card);
+    color: var(--q-color);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s;
+  }
+  .toolbar select:hover { border-color: var(--accent); }
+  .toolbar select:focus { outline: none; border-color: var(--accent); }
   .toolbar .progress {
     align-self: center;
     color: #7b8794;
@@ -155,6 +168,16 @@
   .card.correct .badge { color: #54d18c; }
   .card.partial .badge { color: #ffce6b; }
   .card.incorrect .badge { color: #ff7a7a; }
+  /* 오답 전체 듣기 버튼 (툴바) — 재생 중 강조 */
+  #playWrong.playing {
+    background: #9c3636;
+    border-color: #c14a4a;
+    color: #fff;
+    animation: speakpulse 1.1s ease-in-out infinite;
+  }
+  @keyframes speakpulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+  /* 현재 읽고 있는 카드 강조 */
+  .card.speaking-now { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(78,161,255,0.35); }
   .chevron {
     flex-shrink: 0;
     color: #6b7785;
@@ -391,6 +414,16 @@
     <button id="shuffle">문제 섞기</button>
     <button id="reset">순서 초기화</button>
     <button id="resetMarks">채점 초기화</button>
+    <button id="playWrong">🔊 오답 듣기</button>
+    <select id="ttsRate" title="재생 속도" aria-label="음성 재생 속도">
+      <option value="1">1배속</option>
+      <option value="1.5">1.5배속</option>
+      <option value="2">2배속</option>
+      <option value="2.5">2.5배속</option>
+      <option value="3">3배속</option>
+      <option value="3.5">3.5배속</option>
+      <option value="4">4배속</option>
+    </select>
     <span class="progress" id="progress"></span>
   </div>
 
@@ -492,6 +525,112 @@ function saveMarks() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(marks)); } catch (e) {}
 }
 
+// ── 오답 전체 음성 읽기(TTS) ────────────────────────────────
+// 오답으로 채점한 모든 문항을 "문제 → 정답" 순서로 1.5배속으로 연속 재생.
+// 같은 버튼을 다시 누르면 정지. 브라우저 내장 음성합성 사용(백엔드 불필요).
+const TTS_RATE_KEY = 'bb_tts_rate';
+let ttsRate = parseFloat(localStorage.getItem(TTS_RATE_KEY)) || 3;  // 기본 3배속, 사용자가 선택
+let _ttsQueue = [];      // [{text, qkey}] 재생 항목
+let _ttsIdx = 0;
+let _ttsPlaying = false;
+let _ttsKeepAlive = null;
+let _ttsGen = 0;         // 재시작 시 이전 발화의 콜백 무시용
+
+// 긴 답변은 문장/구두점 기준으로 잘게 나눠 재생(긴 단일 발화 중단 버그 회피)
+function ttsChunks(text, max) {
+  const out = [];
+  let rest = (text || '').replace(/\s+/g, ' ').trim();
+  while (rest.length > max) {
+    const slice = rest.slice(0, max);
+    let cut = Math.max(
+      slice.lastIndexOf('. '), slice.lastIndexOf('? '), slice.lastIndexOf('! '),
+      slice.lastIndexOf(', '), slice.lastIndexOf('·'), slice.lastIndexOf(' ')
+    );
+    cut = cut > max * 0.5 ? cut + 1 : max;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
+function ttsHighlight(qkey) {
+  document.querySelectorAll('.card.speaking-now').forEach(c => c.classList.remove('speaking-now'));
+  if (!qkey) return;
+  const card = listEl.querySelector('.card[data-qkey="' + qkey + '"]');
+  if (card) {
+    card.classList.add('speaking-now');
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function updatePlayBtn() {
+  const btn = document.getElementById('playWrong');
+  if (!btn) return;
+  btn.textContent = _ttsPlaying ? '⏹ 듣기 정지' : '🔊 오답 듣기';
+  btn.classList.toggle('playing', _ttsPlaying);
+}
+
+function stopTTS() {
+  _ttsPlaying = false;
+  _ttsGen++;
+  _ttsQueue = [];
+  _ttsIdx = 0;
+  if (_ttsKeepAlive) { clearInterval(_ttsKeepAlive); _ttsKeepAlive = null; }
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  ttsHighlight(null);
+  updatePlayBtn();
+}
+
+function speakNext() {
+  if (!_ttsPlaying) return;
+  if (_ttsIdx >= _ttsQueue.length) { stopTTS(); return; }
+  const item = _ttsQueue[_ttsIdx++];
+  ttsHighlight(item.qkey);
+  const gen = _ttsGen;
+  const u = new SpeechSynthesisUtterance(item.text);
+  u.lang = 'ko-KR';
+  u.rate = ttsRate;
+  u.onend = () => { if (_ttsPlaying && gen === _ttsGen) speakNext(); };
+  u.onerror = () => { if (_ttsPlaying && gen === _ttsGen) speakNext(); };
+  window.speechSynthesis.speak(u);
+}
+
+function playAllWrong() {
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+    alert('이 브라우저는 음성 읽기를 지원하지 않습니다.');
+    return;
+  }
+  if (_ttsPlaying) { stopTTS(); return; }
+  // 현재 정렬 순서대로 오답 문항만 수집
+  const wrong = [];
+  order.forEach(qi => { if (marks[keyOf(qi)] === 'incorrect') wrong.push(qi); });
+  if (!wrong.length) { alert('오답으로 채점한 문항이 없습니다.'); return; }
+
+  _ttsQueue = [];
+  wrong.forEach((qi, n) => {
+    const [q, a] = QA[qi];
+    const qkey = keyOf(qi);
+    ttsChunks((n + 1) + '번 문제. ' + q, 170).forEach(t => _ttsQueue.push({ text: t, qkey }));
+    ttsChunks('정답. ' + a, 170).forEach(t => _ttsQueue.push({ text: t, qkey }));
+  });
+  _ttsIdx = 0;
+  _ttsPlaying = true;
+  updatePlayBtn();
+  // Chrome 장시간 재생 중단 방지용 keep-alive
+  if (_ttsKeepAlive) clearInterval(_ttsKeepAlive);
+  _ttsKeepAlive = setInterval(() => {
+    if (_ttsPlaying && window.speechSynthesis.speaking) {
+      window.speechSynthesis.pause(); window.speechSynthesis.resume();
+    }
+  }, 9000);
+  speakNext();
+}
+
+// 페이지를 떠날 때 읽기 정지
+window.addEventListener('beforeunload', () => { try { window.speechSynthesis.cancel(); } catch (e) {} });
+
 function passesFilter(qi) {
   const m = marks[keyOf(qi)];
   // 채점 상태 필터
@@ -508,6 +647,8 @@ function passesFilter(qi) {
 }
 
 function render() {
+  // 재렌더 시 진행 중인 음성 읽기 정지(카드 DOM이 교체되므로)
+  if (_ttsPlaying) stopTTS();
   listEl.innerHTML = '';
   let shown = 0;
 
@@ -530,6 +671,7 @@ function render() {
       '<div class="q-text">' + highlight(q) + '</div>' +
       '<div class="badge">' + badgeChar + '</div>' +
       '<div class="chevron">⌄</div>';
+    card.dataset.qkey = keyOf(qi); // 음성 재생 시 현재 카드 강조용
 
     const answer = document.createElement('div');
     answer.className = 'answer';
@@ -676,6 +818,20 @@ document.getElementById('reset').addEventListener('click', () => { order = QA.ma
 document.getElementById('resetMarks').addEventListener('click', () => {
   if (confirm('모든 채점 결과를 초기화할까요?')) {
     marks = {}; saveMarks(); cloudClearAll(); render();
+  }
+});
+document.getElementById('playWrong').addEventListener('click', playAllWrong);
+const ttsRateSel = document.getElementById('ttsRate');
+ttsRateSel.value = String(ttsRate); // 저장된 배속 복원
+ttsRateSel.addEventListener('change', () => {
+  ttsRate = parseFloat(ttsRateSel.value) || 1;
+  try { localStorage.setItem(TTS_RATE_KEY, String(ttsRate)); } catch (e) {}
+  // 재생 중이면 새 배속으로 현재 위치부터 즉시 다시 재생
+  if (_ttsPlaying) {
+    _ttsGen++;                              // 이전 발화 콜백 무효화
+    _ttsIdx = Math.max(0, _ttsIdx - 1);     // 방금 읽던 항목부터
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    speakNext();
   }
 });
 document.querySelectorAll('.chip').forEach(chip => {
