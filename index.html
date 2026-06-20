@@ -525,6 +525,14 @@ function saveMarks() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(marks)); } catch (e) {}
 }
 
+// 새로 추가된 문항(SEED_INCORRECT): 아직 채점 이력이 없으면 기본 '오답'으로 표시.
+// 이미 채점한 문항은 건드리지 않으며, 로그인 시 이 시드값도 클라우드로 동기화됨.
+if (typeof SEED_INCORRECT !== 'undefined') {
+  let _seeded = false;
+  SEED_INCORRECT.forEach(k => { if (!(k in marks)) { marks[k] = 'incorrect'; _seeded = true; } });
+  if (_seeded) saveMarks();
+}
+
 // ── 오답 전체 음성 읽기(TTS) ────────────────────────────────
 // 오답으로 채점한 모든 문항을 "문제 → 정답" 순서로 1.5배속으로 연속 재생.
 // 같은 버튼을 다시 누르면 정지. 브라우저 내장 음성합성 사용(백엔드 불필요).
